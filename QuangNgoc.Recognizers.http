@@ -1,0 +1,6 @@
+@QuangNgoc.Recognizers_HostAddress = http://localhost:5287
+
+GET {{QuangNgoc.Recognizers_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
