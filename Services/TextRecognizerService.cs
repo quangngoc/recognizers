@@ -1,6 +1,5 @@
 ﻿using Microsoft.Recognizers.Text;
 using Microsoft.Recognizers.Text.DataTypes.TimexExpression;
-using Microsoft.Recognizers.Text.DateTime;
 using Microsoft.Recognizers.Text.Number;
 using Microsoft.Recognizers.Text.NumberWithUnit;
 using QuangNgoc.Recognizers.Contracts;
@@ -37,7 +36,7 @@ namespace QuangNgoc.Recognizers.Services
         /// <inheritdoc/>
         public string RecognizeDateRange(string textValue, string culture)
         {
-            List<ModelResult> recognizedResult = DateTimeRecognizer.RecognizeDateTime(textValue, culture);
+            List<ModelResult> recognizedResult = StrictDateTimeRecognizer.RecognizeDateTime(textValue, culture);
 
             if (recognizedResult == null) return null;
 
@@ -70,16 +69,17 @@ namespace QuangNgoc.Recognizers.Services
         /// <inheritdoc/>
         public DateTime? RecognizeDateTime(string textValue, string culture)
         {
+            if (string.IsNullOrEmpty(textValue)) return null;
             if (culture == Culture.French && textValue.Contains(" mil ")) textValue = textValue.Replace(" mil ", " mille ");
             List<ModelResult> recognizedResult = StrictDateTimeRecognizer.RecognizeDateTime(textValue, culture, fallbackToDefaultCulture: false);
             if (recognizedResult == null) return null;
 
             var acceptedDateTypes = new string[] { "datetimeV2.date", "datetimeV2.datetime" };
-            var foundTimexs = recognizedResult
+            var resolutions = recognizedResult
                 .Where(p => acceptedDateTypes.Contains(p.TypeName) && p.Resolution?.ContainsKey("values") == true)
-                .SelectMany(p => p.Resolution["values"] as List<Dictionary<string, string>>)
-                .Where(p => p?.ContainsKey("timex") == true)
-                .Select(p => new TimexProperty(p["timex"])).ToList();
+                .SelectMany(p => p.Resolution["values"] as List<Dictionary<string, string>>);
+            var foundTimexs = resolutions.Where(p => p?.ContainsKey("timex") == true)
+                .Select(p => p["timex"]).Distinct().Select(p => new TimexProperty(p)).ToList();
 
             // Search only timex values with year & month & day
             var foundDates = foundTimexs.Where(p => p.Year != null && p.Month != null && p.DayOfMonth != null).ToList();
@@ -101,7 +101,12 @@ namespace QuangNgoc.Recognizers.Services
             {
                 this._logger.LogError($"{nameof(TextRecognizerService)}: Multiple timex values found for {textValue} in '{culture}' culture");
             }
-
+            else
+            {
+                var recognizedValue = resolutions.Where(p => p?.ContainsKey("value") == true)
+                    .Select(p => p["value"].ToString()).Distinct().LastOrDefault();
+                if (recognizedValue != null) return this.RecognizeDateTime(recognizedValue, culture);
+            }
             return null;
         }
 
@@ -216,7 +221,7 @@ namespace QuangNgoc.Recognizers.Services
         /// <inheritdoc/>
         public long? RecognizeDuration(string textValue, string culture, out string timexValue)
         {
-            List<ModelResult> recognizedResult = DateTimeRecognizer.RecognizeDateTime(textValue, culture);
+            List<ModelResult> recognizedResult = StrictDateTimeRecognizer.RecognizeDateTime(textValue, culture);
             timexValue = null;
             if (recognizedResult == null) return null;
 

@@ -26,6 +26,12 @@ csharp_style_expression_bodied_lambdas = true:silent
 csharp_style_expression_bodied_local_functions = false:silent
 csharp_indent_labels = one_less_than_current
 
+# CS8603: Possible null reference return.
+dotnet_diagnostic.CS8603.severity = none
+
+# CS8601: Possible null reference assignment.
+dotnet_diagnostic.CS8601.severity = none
+
 [*.{cs,vb}]
 #### Naming styles ####
 

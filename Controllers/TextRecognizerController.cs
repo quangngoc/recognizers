@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Recognizers.Text;
+using Microsoft.Recognizers.Text.DataTypes.TimexExpression;
 using QuangNgoc.Recognizers.Contracts;
 using QuangNgoc.Recognizers.Models;
 using Swashbuckle.AspNetCore.Annotations;
+using System.Globalization;
 
 namespace QuangNgoc.Recognizers.Controllers
 {
@@ -29,7 +31,25 @@ namespace QuangNgoc.Recognizers.Controllers
             [FromBody][SwaggerParameter(Description = "Array of text inputs to analyze for date and time values.")] string[] texts,
             [FromQuery][SwaggerParameter(Description = "Culture code to use for date and time recognition, e.g., 'en-us' for English or 'fr-fr' for French.")] string culture = Culture.French)
         {
-            return texts.Select(t => _textRecognizerService.RecognizeDateTime(t, culture)).ToList();
+            var recognizedDates = new List<DateTime?>();
+            foreach (var text in texts)
+            {
+                var recognizedDate = _textRecognizerService.RecognizeDateTime(text, culture);
+                if (recognizedDate == null)
+                {
+                    var recognizedTimex = _textRecognizerService.RecognizeDateRange(text, culture);
+                    if (!string.IsNullOrEmpty(recognizedTimex))
+                    {
+                        var timeResolutions = TimexResolver.Resolve([recognizedTimex], DateTime.UtcNow);
+                        var dateValues = timeResolutions.Values.Where(p => p.Type == "date").Select(p => p).ToList();
+                        var dateRangeValues = timeResolutions.Values.Where(p => p.Type == "daterange" || p.Type == "datetimerange").Select(p => p).ToList();
+                        if (dateValues.Any()) recognizedDate = DateTime.Parse(dateValues.Last().Value, CultureInfo.InvariantCulture, DateTimeStyles.None);
+                        else if (dateRangeValues.Any()) recognizedDate = DateTime.Parse(dateRangeValues.Last().Start ?? dateRangeValues.Last().End, CultureInfo.InvariantCulture, DateTimeStyles.None);
+                    }
+                }
+                recognizedDates.Add(recognizedDate);
+            }
+            return recognizedDates;
         }
 
         [HttpPost]
